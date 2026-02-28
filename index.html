@@ -64,23 +64,30 @@ button {
     border: none;
     border-radius: 12px;
     cursor: pointer;
+
+    background: linear-gradient(135deg, #ff6b6b, #ff3b3b);
     color: white;
-    background: linear-gradient(135deg, #f58b82, #e76f64);
-    box-shadow: 0 8px 20px rgba(231, 111, 100, 0.4);
-    transition: all 0.2s ease;
+
+    box-shadow: 0 8px 20px rgba(255, 59, 59, 0.4);
+    transition: all 0.3s ease;
+
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px);
 }
 
-/* Hover effect */
+/* Visible state */
+button.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+/* Hover */
 button:hover {
     transform: translateY(-3px);
-    box-shadow: 0 12px 25px rgba(255, 59, 59, 0.6);
 }
 
-/* Click effect */
-button:active {
-    transform: translateY(1px);
-    box-shadow: 0 5px 15px rgba(255, 59, 59, 0.4);
-}
 
 </style>
 </head>
@@ -92,10 +99,11 @@ button:active {
     <div class="grid" id="grid"></div>
 </div>
 
-<button onclick="resetBoard()">🔄 Reset Raid</button>
+<button id="resetBtn" onclick="resetBoard()">🔄 Reset Raid</button>
 
 <script>
 const grid = document.getElementById("grid");
+const resetBtn = document.getElementById("resetBtn");
 let cells = [];
 
 // Create 25 cells
@@ -134,9 +142,54 @@ function loadState() {
 }
 
 function resetBoard() {
+    startResetAnimation();
     localStorage.removeItem("bingoState");
     location.reload();
 }
+
+function startResetAnimation() {
+    const overlay = document.createElement("div");
+
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.background = "black";
+    overlay.style.opacity = "0";
+    overlay.style.transition = "opacity 0.6s ease";
+    overlay.style.zIndex = "2000";
+
+    document.body.appendChild(overlay);
+
+    // Trigger fade in
+    setTimeout(() => {
+        overlay.style.opacity = "1";
+    }, 10);
+
+    // After fade completes
+    setTimeout(() => {
+        localStorage.removeItem("bingoState");
+
+        // Clear all cells
+        cells.forEach((cell, i) => {
+            cell.classList.remove("marked");
+            cell.style.boxShadow = "none";
+            if (i === 12) cell.classList.add("marked"); // FREE stays marked
+        });
+
+        resetBtn.classList.remove("show");
+
+        // Fade back out
+        overlay.style.opacity = "0";
+
+        setTimeout(() => {
+            overlay.remove();
+        }, 600);
+
+    }, 700);
+}
+
 
 function checkBingo() {
     const winPatterns = [
@@ -168,6 +221,8 @@ function showBingo(pattern) {
         cells[i].style.boxShadow = "0 0 15px gold";
     });
 
+    resetBtn.classList.add("show");
+
     // Create popup
     const popup = document.createElement("div");
     popup.innerText = "🎉 BINGO! 🎉";
@@ -188,6 +243,7 @@ function showBingo(pattern) {
 
     playSound();
     launchConfetti();
+    
 
     setTimeout(() => {
         popup.remove();
@@ -197,12 +253,31 @@ function showBingo(pattern) {
 // Simple victory sound
 function playSound() {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioCtx.createOscillator();
-    oscillator.type = "square";
-    oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
-    oscillator.connect(audioCtx.destination);
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + 0.2);
+
+    const notes = [
+        { freq: 523, time: 0 },     // C5
+        { freq: 659, time: 0.15 },  // E5
+        { freq: 784, time: 0.3 },   // G5
+        { freq: 1046, time: 0.45 }  // C6 (big finish)
+    ];
+
+    notes.forEach(note => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "triangle";
+        osc.frequency.value = note.freq;
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        gain.gain.setValueAtTime(0.001, audioCtx.currentTime + note.time);
+        gain.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + note.time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + note.time + 0.2);
+
+        osc.start(audioCtx.currentTime + note.time);
+        osc.stop(audioCtx.currentTime + note.time + 0.25);
+    });
 }
 
 // Confetti effect
